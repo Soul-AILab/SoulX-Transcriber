@@ -46,7 +46,14 @@
 
 
 ## 🎬 Demo Video
-Please visit our  ✨[demopage](https://soul-ailab.github.io/soulx-transcriber/)✨ .
+
+<div align="center">
+
+<https://github.com/user-attachments/assets/4020c95b-8cce-4611-a7b5-ffe6f49c1fb6>
+
+</div>
+
+Please visit our  ✨[demopage](https://soul-ailab.github.io/soulx-transcriber/)✨ for more demos.
 <!-- <div align="center">
   <video src="https://github.com/user-attachments/assets/9a57a227-9ac9-4bfb-961f-39df8f93b680" controls width="80%"></video>
 </div> -->
