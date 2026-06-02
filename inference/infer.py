@@ -15,28 +15,28 @@ sdr_system = (
 )
 
 # user prompt without punctuation
-# USER_QUERY = """
-#     Task: Speaker Diarization and ASR. 
-#     Rules:
-#     1. Identify each speaker and their spoken content without punctuation.
-#     2. Format each turn as: [start_time --> end_time] Speaker X: text    
-#     3. Timestamps should be precise to the millisecond (e.g., 00:00:01.234).
-#     4. Do NOT split an utterance to avoid overlap — keep each speaker turn complete.
-#     5. Handle overlapping speech by showing concurrent turns with their own time ranges.
-#     6. Output only the formatted results. No preamble, no explanation.
-# """
-
 USER_QUERY = """
-Task: Speaker Diarization and ASR. 
+    Task: Speaker Diarization and ASR. 
     Rules:
-    1. Identify each speaker and their spoken content with punctuation.
+    1. Identify each speaker and their spoken content without punctuation.
     2. Format each turn as: [start_time --> end_time] Speaker X: text    
     3. Timestamps should be precise to the millisecond (e.g., 00:00:01.234).
     4. Do NOT split an utterance to avoid overlap — keep each speaker turn complete.
     5. Handle overlapping speech by showing concurrent turns with their own time ranges.
     6. Output only the formatted results. No preamble, no explanation.
-<audio>
 """
+
+# USER_QUERY = """
+# Task: Speaker Diarization and ASR. 
+#     Rules:
+#     1. Identify each speaker and their spoken content with punctuation.
+#     2. Format each turn as: [start_time --> end_time] Speaker X: text    
+#     3. Timestamps should be precise to the millisecond (e.g., 00:00:01.234).
+#     4. Do NOT split an utterance to avoid overlap — keep each speaker turn complete.
+#     5. Handle overlapping speech by showing concurrent turns with their own time ranges.
+#     6. Output only the formatted results. No preamble, no explanation.
+# <audio>
+# """
 
 
 
