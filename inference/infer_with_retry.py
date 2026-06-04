@@ -1,4 +1,5 @@
 import os
+import re
 import json
 import numpy as np
 from vllm import SamplingParams
@@ -8,6 +9,8 @@ from vllm.utils.argparse_utils import FlexibleArgumentParser
 
 from vllm_omni.entrypoints.omni import Omni
 
+from utils import detect_and_fix_hallucination_repetition, parse_time
+
 SEED = 42
 
 sdr_system = (
@@ -15,30 +18,52 @@ sdr_system = (
 )
 
 # user prompt without punctuation
-# USER_QUERY = """
-#     Task: Speaker Diarization and ASR. 
-#     Rules:
-#     1. Identify each speaker and their spoken content without punctuation.
-#     2. Format each turn as: [start_time --> end_time] Speaker X: text    
-#     3. Timestamps should be precise to the millisecond (e.g., 00:00:01.234).
-#     4. Do NOT split an utterance to avoid overlap — keep each speaker turn complete.
-#     5. Handle overlapping speech by showing concurrent turns with their own time ranges.
-#     6. Output only the formatted results. No preamble, no explanation.
-# """
-
-# user prompt with punctuation
 USER_QUERY = """
-Task: Speaker Diarization and ASR. 
+    Task: Speaker Diarization and ASR. 
     Rules:
-    1. Identify each speaker and their spoken content with punctuation.
+    1. Identify each speaker and their spoken content without punctuation.
     2. Format each turn as: [start_time --> end_time] Speaker X: text    
     3. Timestamps should be precise to the millisecond (e.g., 00:00:01.234).
     4. Do NOT split an utterance to avoid overlap — keep each speaker turn complete.
     5. Handle overlapping speech by showing concurrent turns with their own time ranges.
     6. Output only the formatted results. No preamble, no explanation.
-<audio>
 """
 
+# USER_QUERY = """
+# Task: Speaker Diarization and ASR. 
+#     Rules:
+#     1. Identify each speaker and their spoken content with punctuation.
+#     2. Format each turn as: [start_time --> end_time] Speaker X: text    
+#     3. Timestamps should be precise to the millisecond (e.g., 00:00:01.234).
+#     4. Do NOT split an utterance to avoid overlap — keep each speaker turn complete.
+#     5. Handle overlapping speech by showing concurrent turns with their own time ranges.
+#     6. Output only the formatted results. No preamble, no explanation.
+# <audio>
+# """
+
+
+def validate_format(hyp):
+    total_len = 0
+    validated_len = 0
+    # pattern = re.compile(r'$$(\d{2}:\d{2}\.\d+)\s*-->\s*(\d{2}:\d{2}\.\d+)$$\s*(Speaker \d+):\s*(.*)')
+    pattern = re.compile(r'\[(\d{2}:\d{2}\.\d{2,3})\s*-->\s*(\d{2}:\d{2}\.\d{2,3})\]\s*(Speaker \d+):\s*(.*)')
+    for line in hyp.strip().split('\n'):
+        match = pattern.match(line.strip())
+        if match:
+            start_time_str, end_time_str, speaker, text = match.groups()
+            start_time = parse_time(start_time_str)
+            end_time = parse_time(end_time_str)
+            if end_time > start_time:
+                validated_len += 1
+            total_len += 1
+
+    if total_len == 0:
+        print(f"格式校验失败: 无匹配行")
+        return False
+    elif validated_len / total_len < 0.8:
+        print(f"格式校验失败: 符合格式的行数占比 {validated_len}/{total_len} < 80%")
+        return False
+    return True
 
 
 def get_audio_query(audio_path: str, sampling_rate: int = 16000) -> dict:
@@ -114,42 +139,54 @@ def init_model(args):
 
 def decode_single(args):
     """single audio inference and write results"""
-    # ── output file name ──
-    wav_name = os.path.splitext(os.path.basename(args.audio_path))[0]
 
     # ── initialize model ──
     omni, sampling_params_list = init_model(args)
 
-    # ── build input ──
-    query_input = get_audio_query(args.audio_path, args.sampling_rate)
-    prompts = [query_input for _ in range(args.num_prompts)]
+    # retry loop for single inference to get valid format
+    for attempt in range(args.MAX_RETRIES):
+        # ── output file name ──
+        wav_name = os.path.splitext(os.path.basename(args.audio_path))[0]
 
-    # ── output directory ──
-    os.makedirs(args.output_dir, exist_ok=True)
-    jsonl_path = os.path.join(args.output_dir, f"{wav_name}.jsonl")
+        # ── build input ──
+        query_input = get_audio_query(args.audio_path, args.sampling_rate)
+        prompts = [query_input for _ in range(args.num_prompts)]
 
-    # ── inference ──
-    with open(jsonl_path, "w", encoding="utf-8") as jsonl_f:
+        # ── output directory ──
+        os.makedirs(args.output_dir, exist_ok=True)
+        jsonl_path = os.path.join(args.output_dir, f"{wav_name}.jsonl")
 
-        omni_generator = omni.generate(
-            prompts, sampling_params_list, py_generator=args.py_generator
-        )
+        # ── inference ──
+        with open(jsonl_path, "w", encoding="utf-8") as jsonl_f:
 
-        for stage_outputs in omni_generator:
-            output = stage_outputs.request_output
-            if stage_outputs.final_output_type == "text":
-                text_output = output.outputs[0].text
-
-                jsonl_f.write(
-                    json.dumps(
-                        {"index": wav_name, "hyp": text_output},
-                        ensure_ascii=False,
-                    ) + "\n"
-                )
-
-                jsonl_f.flush()
-
-                print(f"\n[OUTPUT]\n{text_output}")
+            omni_generator = omni.generate(
+                prompts, sampling_params_list, py_generator=args.py_generator
+            )
+            for stage_outputs in omni_generator:
+                output = stage_outputs.request_output
+                if stage_outputs.final_output_type == "text":
+                    text_output = output.outputs[0].text
+                    is_valid = validate_format(text_output)
+                    if is_valid:
+                        print(f"[SUCCESS] get the valid format in {attempt + 1} attempts.")
+                        text_output = detect_and_fix_hallucination_repetition(text_output)  # 可选：检测并修复重复的幻觉内容
+                        has_hallucination = text_output["has_hallucination"]
+                        if has_hallucination:
+                            print(f"[WARNING] Detected hallucination in the output, please check the result carefully.")
+                        final_text = text_output["repaired_text"] if has_hallucination else text_output["original_text"]
+                        jsonl_f.write(
+                            json.dumps(
+                                {"index": wav_name, "hyp": final_text},
+                                ensure_ascii=False,
+                            ) + "\n"
+                        )
+                        jsonl_f.flush()
+                        print(f"\n[OUTPUT]\n{final_text}")
+                        return
+                    else:
+                        print(f"[WARNING] Attempt {attempt + 1} failed format validation, retrying...")
+                        args.temperature = min(args.temperature + 0.2 * (attempt + 1), 1.0)
+                    break
 
     print(f"\n[DONE] Results saved to {args.output_dir}/")
     print(f"  JSONL: {jsonl_path}")
@@ -175,6 +212,7 @@ def parse_args():
     parser.add_argument("--top-p", type=float, default=0.9)
     parser.add_argument("--top-k", type=int, default=-1)
     parser.add_argument("--max-tokens", type=int, default=32768)
+    parser.add_argument("--MAX-RETRIES", type=int, default=3)
     parser.add_argument("--stage-init-timeout", type=int, default=6000)
     parser.add_argument("--init-timeout", type=int, default=6000)
     parser.add_argument("--py-generator", action="store_true", default=False)

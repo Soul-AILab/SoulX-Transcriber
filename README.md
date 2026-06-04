@@ -302,6 +302,16 @@ source your_env_path/vllm_omni/bin/activate  # source the env
 bash ./inference.sh
 ```
 
+### Infer single wav file with retry mechanism
+
+
+```bash
+# stage1: download pretrained model
+# stage2: inference
+source your_env_path/vllm_omni/bin/activate  # source the env
+bash ./inference_with_retry.sh
+```
+
 
 
 ## 🙏 Acknowledgements
