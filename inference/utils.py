@@ -14,22 +14,22 @@ from typing import Dict, Any, List, Optional, Tuple
 @dataclass
 class RepeatEvent:
     type: str                # "char" / "word" / "phrase"
-    start: int               # 在 cleaned 文本中的起始字符位置
-    end: int                 # 结束字符位置（不含）
+    start: int               # start character index of the repeated block
+    end: int                 # end character index of the repeated block
     repeat_times: int
-    content: str             # 触发的模式（字符 / 词 / 短语）
+    content: str             # the repeated pattern (character / word / phrase)
     extra: Dict[str, Any]
 
 
 def _normalize(text: str) -> str:
-    """简单清洗：去掉 [xx] 形式（如时间戳）、压缩空白。"""
+    """simple text normalization for better repeat detection, can be extended as needed."""
     cleaned = re.sub(r"\[.*?\]", "", text)
     cleaned = re.sub(r"\s+", " ", cleaned).strip()
     return cleaned
 
 
 def _detect_char_repeats(cleaned: str, min_char_repeat: int) -> List[RepeatEvent]:
-    """连续重复单字（任意非空白字符）。"""
+    """detect continuous repeated characters (any non-whitespace characters)."""
     if min_char_repeat <= 1:
         return []
     pattern_char = re.compile(r"(\S)\1{" + str(min_char_repeat - 1) + r",}")
@@ -52,8 +52,8 @@ def _detect_char_repeats(cleaned: str, min_char_repeat: int) -> List[RepeatEvent
 
 def _tokenize(cleaned: str) -> Tuple[List[str], List[int]]:
     """
-    简单英文 token：按非字母数字下划线拆分。
-    返回 tokens 及每个 token 在 cleaned 中的起始字符索引（便于回溯位置）。
+    simple English tokenization: split by non-alphanumeric characters.
+    return tokens and their starting character indices in cleaned (for position tracking).
     """
     tokens: List[str] = []
     starts: List[int] = []
@@ -68,8 +68,8 @@ def _detect_word_repeats(
     min_word_repeat: int,
 ) -> List[RepeatEvent]:
     """
-    连续重复单词（主要针对含空格 / 英文等场景）。
-    对纯中文无空格场景，建议依赖字符级 / 短语级。
+    detect continuous repeated words (mainly for scenarios with spaces / English).
+    for pure Chinese without spaces, it is recommended to rely on character-level / phrase-level detection.
     """
     if min_word_repeat <= 1:
         return []
@@ -79,7 +79,7 @@ def _detect_word_repeats(
 
     events: List[RepeatEvent] = []
     current_word = tokens[0]
-    current_start_idx = 0      # token 索引
+    current_start_idx = 0      # token index
     current_count = 1
 
     for i in range(1, len(tokens)):
@@ -104,7 +104,7 @@ def _detect_word_repeats(
             current_start_idx = i
             current_count = 1
 
-    # 收尾
+    # check the last run
     if current_count >= min_word_repeat:
         start_char = starts[current_start_idx]
         end_token_idx = current_start_idx + current_count - 1
@@ -129,7 +129,7 @@ def _detect_phrase_repeats(
     phrase_max_len: int,
 ) -> List[RepeatEvent]:
     """
-    连续重复短语（只在“有空格”的情况使用英文式分词，避免纯中文拆字噪声）。
+    detect continuous repeated phrases (only used in "with spaces" scenarios with English-style tokenization, to avoid noise from pure Chinese character segmentation).
     """
     if min_phrase_repeat <= 1:
         return []
@@ -179,7 +179,7 @@ def _detect_phrase_repeats(
 
 
 def _compute_bigram_ratio(tokens: List[str]) -> float:
-    """计算全局 bigram 重复率。"""
+    """compute global bigram repeat rate"""
     if len(tokens) < 2:
         return 0.0
     bigrams = [tuple(tokens[i: i + 2]) for i in range(len(tokens) - 1)]
@@ -199,19 +199,19 @@ def detect_and_fix_hallucination_repetition(
     ngram_ratio_threshold: float = 0.99,
 ) -> Dict[str, Any]:
     """
-    检测 & 修复大模型输出文本中的“重复型幻觉”。
+    detect & fix "repeated hallucination" in large model output text.
 
-    修复策略：
-      - 对每个触发的重复事件，只保留第一次出现；后续重复部分标记为删除。
-      - 其它非幻觉内容全部保留。
+    repair strategy:
+      - for each triggered repeat event, only keep the first occurrence; subsequent repeated parts are marked for deletion.
+      - other non-hallucinated content is retained.
 
-    返回:
+    return a dict with:
       {
         "has_hallucination": bool,
         "original_text": str,
         "repaired_text": str,
         "global_ngram_ratio": float,
-        "events": [...],   # 每个重复事件的详细信息（基于 cleaned 文本）
+        "events": [...],   # each repeat event's detailed information (based on cleaned text)
       }
     """
     if not text or not text.strip():
@@ -226,10 +226,10 @@ def detect_and_fix_hallucination_repetition(
     cleaned = _normalize(text)
     events: List[RepeatEvent] = []
 
-    # 1) 连续重复字
+    # 1) consecutive repeated chars
     events.extend(_detect_char_repeats(cleaned, min_char_repeat))
 
-    # 2) 连续重复词 & 短语
+    # 2) consecutive repeated words & phrases
     han_count = len(re.findall(r"[\u4e00-\u9fff]", cleaned))
     space_count = cleaned.count(" ")
     is_chinese_no_space = (han_count > len(cleaned) * 0.3) and (space_count < len(cleaned) * 0.1)
@@ -247,21 +247,21 @@ def detect_and_fix_hallucination_repetition(
             )
         )
     else:
-        # 纯中文无空格：只用字符级 + ngram，避免过度触发短语重复
+        # pure Chinese without spaces: only use character-level + ngram, to avoid excessive triggering of phrase repeats
         tokens_for_ngram = list(cleaned.replace(" ", ""))
 
-    # 3) 全局 n-gram 重复率（只用于标记，不直接裁剪）
+    # 3) global n-gram repeat rate (only for marking, not for direct trimming)
     global_ngram_ratio = _compute_bigram_ratio(tokens_for_ngram)
 
-    # 4) 构造事件信息
+    # 4) construct event information
     event_dicts: List[Dict[str, Any]] = []
     for ev in events:
         event_dicts.append(
             {
                 "type": {
-                    "char": "连续重复字",
-                    "word": "连续重复词",
-                    "phrase": "连续重复短语",
+                    "char": "consecutive repeated characters",
+                    "word": "consecutive repeated words",
+                    "phrase": "consecutive repeated phrases",
                 }[ev.type],
                 "content": ev.content,
                 "repeat_times": ev.repeat_times,
@@ -270,7 +270,7 @@ def detect_and_fix_hallucination_repetition(
             }
         )
 
-    # 5) 仅基于具体事件判断是否有幻觉（n-gram 只作为参考）
+    # 5) only judge based on specific events whether there is hallucination (n-gram is only for reference)
     has_by_detail = any(
         (ev.type == "char" and ev.repeat_times >= min_char_repeat)
         or (ev.type == "word" and ev.repeat_times >= min_word_repeat)
@@ -279,14 +279,14 @@ def detect_and_fix_hallucination_repetition(
     )
     has_hallucination = has_by_detail or (global_ngram_ratio >= ngram_ratio_threshold)
 
-    # 6) 构造字符级保留掩码：默认全部保留
+    # 6) construct character-level retention mask: default all retained
     keep = [True] * len(cleaned)
 
-    # 7) 对每个“触发阈值”的事件，只保留第一次重复单元，其余删掉
+    # 7) for each "triggered threshold" event, only keep the first repeated unit, delete the rest
     for ev in events:
         if ev.type == "char" and ev.repeat_times >= min_char_repeat:
-            # 重复块为 cleaned[ev.start:ev.end] = content * repeat_times
-            unit_len = len(ev.content)  # 对于 char，这里是 1
+            # repeated block as cleaned[ev.start:ev.end] = content * repeat_times
+            unit_len = len(ev.content)  # for char, this is 1
             first_end = ev.start + unit_len
             for i in range(first_end, ev.end):
                 keep[i] = False
@@ -295,20 +295,20 @@ def detect_and_fix_hallucination_repetition(
             threshold = min_word_repeat if ev.type == "word" else min_phrase_repeat
             if ev.repeat_times < threshold:
                 continue
-            # block 中形如 "X X X X..."，我们保留第一个 X，其余删除
+            # block like "X X X X...", we keep the first X，delete the rest
             block = cleaned[ev.start:ev.end]
             pos0 = block.find(ev.content)
             if pos0 == -1:
-                # 找不到就保守地不动
+                # not found, be conservative and keep everything
                 continue
             pos1 = pos0 + len(ev.content)
             first_keep_start = ev.start + pos0
             first_keep_end = ev.start + pos1
-            # 删除 first_keep_end ~ ev.end
+            # delete first_keep_end ~ ev.end
             for i in range(first_keep_end, ev.end):
                 keep[i] = False
 
-    # 8) 重建 cleaned 版文本
+    # 8) reconstruct cleaned version of text
     repaired_cleaned = "".join(ch for i, ch in enumerate(cleaned) if i < len(keep) and keep[i])
 
     return {
