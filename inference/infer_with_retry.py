@@ -45,7 +45,6 @@ USER_QUERY = """
 def validate_format(hyp):
     total_len = 0
     validated_len = 0
-    # pattern = re.compile(r'$$(\d{2}:\d{2}\.\d+)\s*-->\s*(\d{2}:\d{2}\.\d+)$$\s*(Speaker \d+):\s*(.*)')
     pattern = re.compile(r'\[(\d{2}:\d{2}\.\d{2,3})\s*-->\s*(\d{2}:\d{2}\.\d{2,3})\]\s*(Speaker \d+):\s*(.*)')
     for line in hyp.strip().split('\n'):
         match = pattern.match(line.strip())
@@ -58,10 +57,10 @@ def validate_format(hyp):
             total_len += 1
 
     if total_len == 0:
-        print(f"格式校验失败: 无匹配行")
+        print(f"format validation failed: no matching lines")
         return False
     elif validated_len / total_len < 0.8:
-        print(f"格式校验失败: 符合格式的行数占比 {validated_len}/{total_len} < 80%")
+        print(f"format validation failed: {validated_len}/{total_len} < 80%")
         return False
     return True
 
@@ -169,7 +168,7 @@ def decode_single(args):
                     is_valid = validate_format(text_output)
                     if is_valid:
                         print(f"[SUCCESS] get the valid format in {attempt + 1} attempts.")
-                        text_output = detect_and_fix_hallucination_repetition(text_output)  # 可选：检测并修复重复的幻觉内容
+                        text_output = detect_and_fix_hallucination_repetition(text_output)
                         has_hallucination = text_output["has_hallucination"]
                         if has_hallucination:
                             print(f"[WARNING] Detected hallucination in the output, please check the result carefully.")
