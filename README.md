@@ -260,6 +260,8 @@ We provide the pre-trained model weights on Hugging Face and modelscope. You can
 
 ## Training & Fine-tuning
 SoulX-Transcriber shares the same architecture with Qwen3-Omni-30BA3B-Instruct. We recommend users conduct continued pre-training and fine-tuning for this model via the [ms-swift](https://github.com/modelscope/ms-swift) toolkit.
+
+We will release our training scripts soon.
 ## Inference
 
 ### vLLM-omni
