@@ -319,3 +319,12 @@ def detect_and_fix_hallucination_repetition(
         "events": event_dicts,
     }
 
+def parse_time(time_str):
+    """
+    Parse a time string, supporting the "MM:SS.ss" format, and convert it to a number of seconds.
+    """
+    try:
+        minutes, seconds = time_str.split(':')
+        return float(minutes) * 60 + float(seconds)
+    except ValueError:
+        return 0.0
