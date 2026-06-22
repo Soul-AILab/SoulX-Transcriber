@@ -149,8 +149,8 @@ SoulX-Transcriber is a unified end-to-end large audio language model for **multi
     <tr><td colspan="7"><b>End-to-End Baselines</b></td></tr>
     <tr>
       <td>VibeVoice-ASR</td>
-      <td><u>18.00</u></td><td>29.72</td><td>31.94</td><td>2.22</td>
-      <td><u>9.17</u></td><td>19.54</td><td>22.95</td><td>3.41</td>
+      <td><u>18.00</u></td><td>29.72</td><td><u>31.94</u></td><td><u>2.22</u></td>
+      <td><u>9.17</u></td><td><u>19.54</u></td><td><u>22.95</u></td><td><u>3.41</u></td>
     </tr>
     <tr>
       <td>Gemini-2.5-Pro†</td>
@@ -159,19 +159,14 @@ SoulX-Transcriber is a unified end-to-end large audio language model for **multi
     </tr>
     <tr>
       <td>Gemini-3.1-pro-preview†</td>
-      <td>38.75</td><td>26.75</td><td>32.84</td><td>6.09</td>
+      <td>38.75</td><td><u>26.75</u></td><td>32.84</td><td>6.09</td>
       <td>22.03</td><td>22.75</td><td>27.43</td><td>4.68</td>
-    </tr>
-    <tr>
-      <td>Qwen3-omni-30B-Instruct</td>
-      <td>38.36</td><td>25.28</td><td>37.54</td><td>12.26</td>
-      <td>34.71</td><td><u>15.95</u></td><td>23.63</td><td>7.68</td>
     </tr>
     <tr><td colspan="9"><b>Ours</b></td></tr>
     <tr>
       <td><b>SoulX-Transcriber</b></td>
-      <td><b>4.40</b></td><td><b>10.34</b></td><td><b>11.58</b></td><td><b>1.24</b></td>
-      <td><b>6.12</b></td><td><b>12.87</b></td><td><b>15.45</b></td><td><u>2.58</u></td>
+      <td><b>5.72</b></td><td><b>16.22</b></td><td><b>16.99</b></td><td><b>0.77</b></td>
+      <td><b>7.73</b></td><td><b>14.49</b></td><td><b>17.82</b></td><td><b>3.33</b></td>
     </tr>
   </tbody>
 </table>
