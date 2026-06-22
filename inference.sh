@@ -28,7 +28,7 @@ python ./inference/infer.py \
   --audio-path $wav_path \
   --output-dir $out_dir \
   --stage-configs-path $config_path \
-  --temperature 0.9 \
+  --temperature 0.2 \
   --top-p 0.9 \
   --top-k -1 \
   --max-tokens 32768 \
